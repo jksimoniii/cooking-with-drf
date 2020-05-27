@@ -1,0 +1,93 @@
+version: 2.1
+orbs:
+    aws-cli: circleci/aws-cli@0.1.13
+    aws-ecr: circleci/aws-ecr@3.1.0
+    k8s: circleci/kubernetes@0.2.0
+jobs:
+  test:
+    docker:
+      - image: circleci/python:3.6
+    steps:
+      - checkout
+      - run:
+          name: Setup Virtualenv
+          command: |
+            python3 -m venv venv
+            . venv/bin/activate
+            pip install -r requirements.txt --extra-index-url https://pip.expandshare.com/b00332a492824ae434ccf91112b6b1db
+  deploy_dev:
+    executor: aws-cli/default
+    steps:
+      - aws-cli/install
+      - aws-cli/configure
+      - k8s/install
+      - run:
+          name: Update K8s Deployment
+          command: |
+            curl -o aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.12.7/2019-03-27/bin/linux/amd64/aws-iam-authenticator
+            chmod +x aws-iam-authenticator
+            mkdir $HOME/bin && cp ./aws-iam-authenticator $HOME/bin/aws-iam-authenticator && export PATH=$HOME/bin:$PATH
+            aws eks --region ${AWS_DEFAULT_REGION} update-kubeconfig --name ${K8S_CLUSTER_NAME}
+            kubectl set image deployment/${K8S_DEPLOYMENT_NAME} app=${AWS_ECR_ACCOUNT_URL}/${AWS_RESOURCE_NAME_PREFIX}:${CIRCLE_SHA1} --namespace=dev
+            curl https://api.rollbar.com/api/1/deploy/ \
+              -F access_token=${ROLLBAR_ACCESS_TOKEN} \
+              -F environment=development\
+              -F revision=${CIRCLE_SHA1}\
+              -F local_username=$(whoami)
+  deploy_prod:
+    executor: aws-cli/default
+    steps:
+      - aws-cli/install
+      - aws-cli/configure
+      - k8s/install
+      - run:
+          name: Update K8s Deployment
+          command: |
+            curl -o aws-iam-authenticator https://amazon-eks.s3-us-west-2.amazonaws.com/1.12.7/2019-03-27/bin/linux/amd64/aws-iam-authenticator
+            chmod +x aws-iam-authenticator
+            mkdir $HOME/bin && cp ./aws-iam-authenticator $HOME/bin/aws-iam-authenticator && export PATH=$HOME/bin:$PATH
+            aws eks --region ${AWS_DEFAULT_REGION} update-kubeconfig --name ${K8S_CLUSTER_NAME}
+            kubectl set image deployment/${K8S_DEPLOYMENT_NAME} app=${AWS_ECR_ACCOUNT_URL}/${AWS_RESOURCE_NAME_PREFIX}:${CIRCLE_SHA1} --namespace=prod
+            curl https://api.rollbar.com/api/1/deploy/ \
+              -F access_token=${ROLLBAR_ACCESS_TOKEN} \
+              -F environment=production\
+              -F revision=${CIRCLE_SHA1}\
+              -F local_username=$(whoami)
+
+workflows:
+  pipeline:
+    jobs:
+      - test
+      - aws-ecr/build_and_push_image:
+          name: "Build :${CIRCLE_SHA1}"
+          requires:
+            - test
+          repo: "${AWS_RESOURCE_NAME_PREFIX}"
+          tag: "${CIRCLE_SHA1}"
+          filters:
+            branches:
+              only:
+                - develop
+                - master
+      - aws-ecr/build_and_push_image:
+          name: "Build :latest"
+          requires:
+            - test
+          repo: "${AWS_RESOURCE_NAME_PREFIX}"
+          tag: "latest"
+          filters:
+            branches:
+              only:
+                - master
+      - deploy_dev:
+          requires:
+            - "Build :${CIRCLE_SHA1}"
+          filters:
+            branches:
+              only: develop
+      - deploy_prod:
+          requires:
+            - "Build :latest"
+          filters:
+            branches:
+              only: master

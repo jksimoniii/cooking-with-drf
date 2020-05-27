@@ -1,0 +1,78 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myproj
+  labels:
+    name: myproj
+  namespace: dev
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: myproj
+  template:
+    metadata:
+      labels:
+        name: myproj
+    spec:
+      nodeSelector:
+        environment: dev
+      containers:
+      - name: app
+        image: 561126230561.dkr.ecr.us-east-1.amazonaws.com/myproj:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+        envFrom:
+          - secretRef:
+              name: myproj
+          - secretRef:
+              name: amqp
+#      - name: workers
+#        image: 561126230561.dkr.ecr.us-east-1.amazonaws.com/myproj:latest
+#        imagePullPolicy: Always
+#        ports:
+#        - containerPort: 8000
+#        env:
+#        - name: C_FORCE_ROOT
+#          value: "true"
+#        envFrom:
+#          - secretRef:
+#              name: myproj
+#          - secretRef:
+#              name: amqp
+#        command: ["/bin/bash"]
+#        args: ['-c', 'celery -A tasks -Q myproj worker --loglevel=error']
+#      - name: workers-priority
+#        image: 561126230561.dkr.ecr.us-east-1.amazonaws.com/myproj:latest
+#        imagePullPolicy: Always
+#        ports:
+#        - containerPort: 8000
+#        env:
+#        - name: C_FORCE_ROOT
+#          value: "true"
+#        envFrom:
+#          - secretRef:
+#              name: myproj
+#          - secretRef:
+#              name: amqp
+#        command: ["/bin/bash"]
+#        args: ['-c', 'celery -A tasks -Q myproj_priority worker --loglevel=error']
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: myproj
+  labels:
+    name: myproj
+  namespace: dev
+spec:
+  type: NodePort
+  ports:
+  - port: 80
+    targetPort: 8000
+    protocol: TCP
+  selector:
+    name: myproj

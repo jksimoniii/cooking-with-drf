@@ -1,0 +1,63 @@
+version: '3.5'
+
+services:
+  db:
+    container_name: myproj-db
+    image: postgres
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT}:5432"
+    environment:
+      POSTGRES_USER: "${DB_USER}"
+      POSTGRES_PASSWORD: "${DB_PASSWORD}"
+      POSTGRES_DB: "${DB_NAME}"
+    volumes:
+      - ./.docker/data:/var/lib/postgresql/data:cached
+
+  app:
+    container_name: myproj-app
+    build: .
+    ports:
+      - "127.0.0.1:${DJANGO_PORT}:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgres://${DB_USER}:${DB_PASSWORD}@db/${DB_NAME}"
+    volumes:
+      - ./src:/code:cached
+    command: /bin/bash /wait-for-it.sh db:5432 -t 0 -- bash -c "python manage.py migrate && python manage.py runserver 0.0.0.0:8000"
+    depends_on:
+      - db
+
+  proxy:
+    container_name: myproj-proxy
+    build:
+      context: ./.docker/proxy
+      args:
+        BACKEND_HOST: '${PROXY_BACKEND_HOST}'
+        BACKEND_PORT: '${DJANGO_PORT}'
+        FRONTEND_HOST: '${PROXY_FRONTEND_HOST}'
+        FRONTEND_PORT: '${PROXY_FRONTEND_PORT}'
+        PROXY_PORT: '${PROXY_PORT}'
+    ports:
+      - "127.0.0.1:${PROXY_PORT}:80"
+    depends_on:
+      - app
+
+#  workers:
+#    container_name: myproj-workers
+#    build: .
+#    volumes:
+#      - ./src:/code:cached
+#    env_file:
+#      - .env
+#    environment:
+#      C_FORCE_ROOT: "true"
+#    command: bash /wait-for-it.sh db:5432 -t 0 -- bash -c "celery worker --app=tasks --time-limit=300 --loglevel=INFO -B"
+#    depends_on:
+#      - db
+#    networks:
+#      - default
+
+networks:
+  default:
+    name: myproj
