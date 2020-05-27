@@ -17,6 +17,7 @@ INSTALLED_APPS += [
     'corsheaders',
 
     # Custom apps
+    'polls',
 ]
 
 # Static Files + Media Configuration
