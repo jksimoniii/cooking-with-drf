@@ -19,6 +19,7 @@ INSTALLED_APPS += [
 
     # Custom apps
     'polls',
+    'tenants',
 ]
 
 # Static Files + Media Configuration

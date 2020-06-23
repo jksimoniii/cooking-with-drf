@@ -4,11 +4,11 @@ from polls import models
 
 class ChoiceSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
-        fields = '__all__'
+        exclude = ('tenant',)
         model = models.Choice
 
 
 class QuestionSerializer(serializers.HyperlinkedModelSerializer):
     class Meta:
-        fields = '__all__'
+        exclude = ('tenant',)
         model = models.Question
